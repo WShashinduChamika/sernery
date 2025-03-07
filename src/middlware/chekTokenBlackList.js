@@ -1,6 +1,6 @@
-import jwt from 'jsonwebtoken';
 import BlackListToken from '../models/blackListTokenModel.js';
 import { sendErrorResponse } from '../utils/responseUtil.js';
+import { verifyEncodedToken } from '../utils/tokenUtil.js';
 
 export const checkTokenBlackList = async (req, res, next) => {
 
@@ -32,7 +32,7 @@ export const addTokenToBlackList = async (token) => {
 
     try {
 
-        const decodedToken = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+        const decodedToken = verifyEncodedToken(token, process.env.ACCESS_TOKEN_SECRET);
 
         const expiredAt = new Date(decodedToken.exp * 1000);
 

@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { sendErrorResponse } from "../utils/responseUtil.js";
+import { verifyEncodedToken } from "../utils/tokenUtil.js";
 
 export const verifyToken = (req, res, next) => {
 
@@ -9,24 +10,9 @@ export const verifyToken = (req, res, next) => {
         return sendErrorResponse(res, 401, "Access denied. No token provided")
     }
 
-    try {
+    const decodedToken = verifyEncodedToken(token, process.env.ACCESS_TOKEN_SECRET);
 
-        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    req.user = decodedToken;
 
-        req.user = decoded;
-
-        next();
-
-    } catch (error) {
-
-        if (error instanceof jwt.TokenExpiredError) {
-            return sendErrorResponse(res, 401, "Access Token expired.", error);
-        }
-
-        if (error instanceof jwt.JsonWebTokenError) {
-            return sendErrorResponse(res, 401, "Invalid token.", error);
-        }
-
-        return sendErrorResponse(res, 500, "Internal Server Error", error);
-    }
+    next();
 }

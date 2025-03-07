@@ -61,6 +61,7 @@ export const userLoginValidation = (data) => {
     // Password validation
     const passwordRegex =
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
+
     if (!data.password || validator.isEmpty(data.password)) {
         errors.push("Password is required");
         return errors;
@@ -71,4 +72,38 @@ export const userLoginValidation = (data) => {
 
 
     return errors;
+}
+
+export const forgotPasswordValidation = (data) => {
+
+    const errors = [];
+
+    //User email validation
+    if (!data.email || validator.isEmpty(data.email)) {
+        return errors.push("Email is required");
+    }
+    if (!validator.isEmail(data.email)) {
+        return errors.push("Email is not valid one");
+    }
+    if (data.email.length > 100) {
+        return errors.push("Email is too long");
+    }
+
+    return errors;
+}
+
+export const resetPasswordValidation = (password) =>{
+
+    let error;
+    
+    const passwordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
+
+    if(!password || validator.isEmpty(password)){
+        return error = "Password is required";
+    }
+    if(!passwordRegex.test(password)){
+        return error = "Password is not strong";
+    }
+
 }

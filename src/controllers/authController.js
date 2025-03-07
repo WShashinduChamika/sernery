@@ -1,10 +1,9 @@
 import { addTokenToBlackList } from '../middlware/chekTokenBlackList.js';
 import User from '../models/userModel.js';
-import { comparePassword, compareRefreshToken, hashPassword, hashRefreshToken } from '../utils/authUtil.js';
+import { comparePassword, compareRefreshToken, hashPassword, hashRefreshToken, sendResetEmail } from '../utils/authUtil.js';
 import { sendSuccessResponse, sendErrorResponse } from '../utils/responseUtil.js';
-import { generateAccessToken, generateRefreshToken } from '../utils/tokenUtil.js';
-import { userLoginValidation, userRegistrationValidation } from '../validations/authValidation.js';
-import jwt from "jsonwebtoken";
+import { generateAccessToken, generateRefreshToken, generateResetPasswordToken, verifyEncodedToken } from '../utils/tokenUtil.js';
+import { forgotPasswordValidation, resetPasswordValidation, userLoginValidation, userRegistrationValidation } from '../validations/authValidation.js';
 
 export const registerUser = async (req, res) => {
     try {
@@ -116,25 +115,25 @@ export const loginUser = async (req, res) => {
 export const logoutUser = async (req, res) => {
     try {
 
-         const {userId} = req.user;
-        
-         const user = await User.findOne({_id:userId});
+        const { userId } = req.user;
 
-         if(!user){
-            return sendErrorResponse(res,404,"User not found");
-         }
+        const user = await User.findOne({ _id: userId });
 
-         const token = req.headers.authorization?.split(" ")[1];
+        if (!user) {
+            return sendErrorResponse(res, 404, "User not found");
+        }
 
-         addTokenToBlackList(token);
+        const token = req.headers.authorization?.split(" ")[1];
 
-         user.refreshToken = null;
+        addTokenToBlackList(token);
 
-         await user.save();
+        user.refreshToken = null;
 
-         res.clearCookie("refreshToken");
+        await user.save();
 
-         return sendSuccessResponse(res, 200, "Logout successful");
+        res.clearCookie("refreshToken");
+
+        return sendSuccessResponse(res, 200, "Logout successful");
 
     } catch (error) {
 
@@ -149,27 +148,11 @@ export const setRefreshToken = async (req, res) => {
         if (!refreshToken) {
             return sendErrorResponse(res, 400, "Refresh token is required");
         }
-
-        let decodedRefreshToken
-        try {
-
-            decodedRefreshToken = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-           
-        } catch (error) {
-
-            if (error instanceof jwt.TokenExpiredError) {
-                return sendErrorResponse(res, 401, "Access Token expired.", error);
-            }
-
-            if (error instanceof jwt.JsonWebTokenError) {
-                return sendErrorResponse(res, 401, "Invalid token.", error);
-            }
-
-            return sendErrorResponse(res, 500, "Internal Server Error", error);
-        }
+        
+        const decodedRefreshToken = verifyEncodedToken(refreshToken,process.env.REFRESH_TOKEN_SECRET);
 
         const user = await User.findOne({ _id: decodedRefreshToken.userId });
-        
+
         if (!user) {
             return sendErrorResponse(res, 404, "User not found");
         }
@@ -181,9 +164,9 @@ export const setRefreshToken = async (req, res) => {
         }
 
         const accessToken = generateAccessToken(user._id);
-       
+
         const newRefreshToken = generateRefreshToken(user._id);
-       
+
         const hashedRefreshToken = await hashRefreshToken(newRefreshToken);
 
         user.refreshToken = hashedRefreshToken;
@@ -202,7 +185,76 @@ export const setRefreshToken = async (req, res) => {
         });
 
     } catch (error) {
-        
+
         sendErrorResponse(res, 500, "Internal Server Error", error);
     }
+}
+
+export const forgotPassword = async (req, res) => {
+    try {
+
+        const { email } = req.body;
+        
+        console.log(email);
+
+        const validationError = forgotPasswordValidation(email);
+
+        if (Object.keys(validationError).length > 0) {
+            return sendErrorResponse(res, 400, "Email validation errors", validationError);
+        }
+
+        const user = await User.findOne({ email: email });
+
+        if (!user) {
+            return sendErrorResponse(res, 404, "User not found");
+        }
+
+        //Send email with password reset link
+        const resetPasswordToken = generateResetPasswordToken(user._id);
+
+        const data = await sendResetEmail(user.email, resetPasswordToken);
+
+        if (data) {
+            return sendSuccessResponse(res, 200, "Password reset link sent successfully", data);
+        }
+
+    } catch (error) {
+
+        sendErrorResponse(res, 500, "Internal Server Error", error);
+
+    }
+}
+
+export const resetPasswrod = async (req, res) => {
+
+    const { password, token } = req.body;
+
+    const validationError = resetPasswordValidation(password);
+
+    if(validationError){
+        return sendErrorResponse(res, 400, "Password validation errors",validationError);
+    }
+
+    if (!token) {
+        return sendErrorResponse(res, 401, "Access denied. No token provided");
+    }
+
+    const decodedResetPasswordToken = verifyEncodedToken(token,process.env.RESET_PASSWORD_TOKEN_SECRET);
+
+    const userId = decodedResetPasswordToken.userId;
+
+    const user = await User.findOne({ _id: userId });
+
+    if (!user) {
+        return sendErrorResponse(res, 404, "User not found");
+    }
+
+    const hashedPassword = await hashPassword(password);
+    
+    user.password = hashedPassword;
+
+    await user.save();
+
+    return sendSuccessResponse(res, 200, "Password successfully updated !");
+
 }
